@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07111f" />
+  <title>ECE493 Hoverboard Controller</title>
+  <style>
+    :root{
+      --bg:#07111f;
+      --panel:#0d1a2b;
+      --panel2:#12243a;
+      --text:#f5f7fb;
+      --muted:#9fb0c6;
+      --line:#243a54;
+      --accent:#58a6ff;
+      --good:#4ade80;
+      --warn:#fbbf24;
+      --danger:#ef4444;
+      --silver:#c4cedb;
+      --shadow:0 18px 50px rgba(0,0,0,.32);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:radial-gradient(circle at top,#10233a 0,#07111f 48%,#050b13 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+    button,input{font:inherit}
+    .app{max-width:940px;margin:0 auto;padding:16px 0 28px}
+    .topbar{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .brand h1{font-size:clamp(20px,4vw,30px);margin:0;letter-spacing:.2px}
+    .brand p{margin:5px 0 0;color:var(--muted);font-size:13px}
+    .status-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:rgba(13,26,43,.8);padding:9px 12px;border-radius:999px;font-size:13px;white-space:nowrap}
+    .dot{width:10px;height:10px;border-radius:50%;background:var(--danger);box-shadow:0 0 14px rgba(239,68,68,.45)}
+    .dot.on{background:var(--good);box-shadow:0 0 14px rgba(74,222,128,.55)}
+    .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.topbar{align-items:flex-start}.status-pill{margin-top:3px}}
+    .card{background:linear-gradient(180deg,rgba(18,36,58,.94),rgba(10,23,38,.94));border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:16px}
+    .card h2{font-size:15px;margin:0 0 12px;color:var(--silver);font-weight:700;letter-spacing:.7px;text-transform:uppercase}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+    .btn{border:1px solid var(--line);background:#13263e;color:var(--text);padding:13px 14px;border-radius:14px;font-weight:750;cursor:pointer;transition:.15s transform,.15s background,.15s border}
+    .btn:active{transform:scale(.98)}
+    .btn.primary{background:#123d69;border-color:#286ba8}
+    .btn.danger{background:#5b171b;border-color:#a5272e;color:#fff}
+    .btn.auto{background:#173c31;border-color:#2b7358}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .notice{font-size:12px;color:var(--muted);line-height:1.45;border:1px dashed var(--line);padding:10px 12px;border-radius:12px;margin-top:10px}
+    .joystick-wrap{display:flex;justify-content:center;padding:8px 0 4px}
+    #joystick{
+      width:min(76vw,340px);
+      aspect-ratio:1;
+      border-radius:50%;
+      position:relative;
+      touch-action:none;
+      user-select:none;
+      background:
+        radial-gradient(circle at center,rgba(88,166,255,.10) 0 11%,transparent 12%),
+        linear-gradient(90deg,transparent calc(50% - .5px),rgba(196,206,219,.18) 50%,transparent calc(50% + .5px)),
+        linear-gradient(0deg,transparent calc(50% - .5px),rgba(196,206,219,.18) 50%,transparent calc(50% + .5px)),
+        radial-gradient(circle at center,#10263e 0 58%,#0b1a2d 59% 100%);
+      border:2px solid #2b4663;
+      box-shadow:inset 0 0 45px rgba(0,0,0,.35),0 16px 40px rgba(0,0,0,.25);
+    }
+    .axis-label{position:absolute;color:#72869d;font-size:11px;font-weight:800;letter-spacing:.5px}
+    .axis-label.up{top:10px;left:50%;transform:translateX(-50%)}
+    .axis-label.down{bottom:10px;left:50%;transform:translateX(-50%)}
+    .axis-label.left{left:12px;top:50%;transform:translateY(-50%)}
+    .axis-label.right{right:12px;top:50%;transform:translateY(-50%)}
+    #stick{
+      width:31%;
+      aspect-ratio:1;
+      border-radius:50%;
+      position:absolute;
+      left:50%;top:50%;
+      transform:translate(-50%,-50%);
+      background:radial-gradient(circle at 35% 30%,#8dc5ff,#3d8ed9 58%,#1d568d 100%);
+      border:2px solid #9dd0ff;
+      box-shadow:0 10px 30px rgba(21,109,180,.45),inset 0 0 16px rgba(255,255,255,.18);
+      pointer-events:none;
+    }
+    .readout{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+    .metric{background:#0b1a2b;border:1px solid var(--line);border-radius:13px;padding:10px;text-align:center}
+    .metric small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}
+    .metric strong{display:block;margin-top:3px;font-size:18px}
+    .slider-row{margin:14px 0}
+    .slider-head{display:flex;justify-content:space-between;gap:10px;color:var(--silver);font-size:13px;margin-bottom:7px}
+    input[type=range]{width:100%;accent-color:#58a6ff}
+    .telemetry{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .telemetry .metric strong{font-size:20px}
+    .log{height:145px;overflow:auto;background:#06101c;border:1px solid var(--line);border-radius:12px;padding:10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#b8c7d9;white-space:pre-wrap}
+    .manual-send{display:flex;gap:8px;margin-top:10px}
+    .manual-send input{flex:1;min-width:0;background:#071421;border:1px solid var(--line);border-radius:12px;padding:11px 12px;color:var(--text)}
+    .mode-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0a1828;border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin-bottom:10px}
+    .mode-banner span{font-size:12px;color:var(--muted)}
+    .mode-banner strong{font-size:14px}
+    .footer{color:#72869d;font-size:11px;line-height:1.45;margin:14px 4px 0}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>ECE493 Hoverboard Controller</h1>
+        <p>BLE joystick • manual steering • autonomous hallway mode</p>
+      </div>
+      <div class="status-pill">
+        <span id="statusDot" class="dot"></span>
+        <span id="connectionText">Disconnected</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Joystick</h2>
+        <div class="mode-banner">
+          <div>
+            <span>Control mode</span><br>
+            <strong id="modeText">STOPPED</strong>
+          </div>
+          <div style="text-align:right">
+            <span>BLE device</span><br>
+            <strong id="deviceText">—</strong>
+          </div>
+        </div>
+
+        <div class="joystick-wrap">
+          <div id="joystick" aria-label="Hoverboard joystick">
+            <span class="axis-label up">FORWARD</span>
+            <span class="axis-label down">REVERSE</span>
+            <span class="axis-label left">LEFT</span>
+            <span class="axis-label right">RIGHT</span>
+            <div id="stick"></div>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div class="metric"><small>Throttle</small><strong id="throttleOut">0%</strong></div>
+          <div class="metric"><small>Steering</small><strong id="steerOut">0%</strong></div>
+          <div class="metric"><small>Command</small><strong id="commandOut">S</strong></div>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-head"><span>Manual max speed</span><strong><span id="speedValue">20</span>%</strong></div>
+          <input id="speedSlider" type="range" min="5" max="60" step="1" value="20">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-head"><span>Maximum turn strength</span><strong><span id="turnValue">30</span>%</strong></div>
+          <input id="turnSlider" type="range" min="5" max="100" step="1" value="30">
+        </div>
+
+        <div class="controls">
+          <button id="autoBtn" class="btn auto" disabled>AUTO NAV</button>
+          <button id="stopBtn" class="btn danger" disabled>STOP</button>
+        </div>
+
+        <div class="notice">
+          Releasing the joystick sends <b>S</b>. Moving it again leaves AUTO and returns to manual control.
+          Keep the physical E-stop available during powered tests.
+        </div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom:14px">
+          <h2>Bluetooth</h2>
+          <div class="controls">
+            <button id="connectBtn" class="btn primary">Connect BLE</button>
+            <button id="disconnectBtn" class="btn" disabled>Disconnect</button>
+          </div>
+          <div class="notice" id="browserNotice">
+            Requires a browser with Web Bluetooth and a secure context (HTTPS or localhost).
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <h2>Telemetry</h2>
+          <div class="telemetry">
+            <div class="metric"><small>Left sensor</small><strong id="leftDistance">—</strong></div>
+            <div class="metric"><small>Right sensor</small><strong id="rightDistance">—</strong></div>
+            <div class="metric"><small>Left motor</small><strong id="leftMotor">—</strong></div>
+            <div class="metric"><small>Right motor</small><strong id="rightMotor">—</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>BLE Log</h2>
+          <div id="log" class="log">Ready.</div>
+          <div class="manual-send">
+            <input id="manualCommand" placeholder="e.g. STATUS or BASE 20">
+            <button id="sendBtn" class="btn" disabled>Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer">
+      BLE service: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E. This controller is designed for your current ESP32 command set:
+      F, B, L, R, S, MSPEED, TURN, AUTO/BF, BASE, STATUS, and telemetry notifications.
+    </p>
+  </main>
+
+<script>
+(() => {
+  const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  const RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+  const TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+  let device = null;
+  let rxCharacteristic = null;
+  let txCharacteristic = null;
+  let connected = false;
+  let writeChain = Promise.resolve();
+
+  let joystickActive = false;
+  let lastDirection = 'S';
+  let lastSentSpeed = -1;
+  let lastSentTurn = -1;
+  let lastKeepAlive = 0;
+  let autoMode = false;
+
+  const DEADZONE = 0.12;
+  const SEND_INTERVAL = 110;
+  let lastJoystickSend = 0;
+
+  const $ = id => document.getElementById(id);
+  const connectBtn = $('connectBtn');
+  const disconnectBtn = $('disconnectBtn');
+  const stopBtn = $('stopBtn');
+  const autoBtn = $('autoBtn');
+  const sendBtn = $('sendBtn');
+  const logEl = $('log');
+  const joystick = $('joystick');
+  const stick = $('stick');
+
+  function log(message) {
+    const stamp = new Date().toLocaleTimeString();
+    logEl.textContent += `\n[${stamp}] ${message}`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setConnected(value) {
+    connected = value;
+    $('statusDot').classList.toggle('on', value);
+    $('connectionText').textContent = value ? 'Connected' : 'Disconnected';
+    connectBtn.disabled = value;
+    disconnectBtn.disabled = !value;
+    stopBtn.disabled = !value;
+    autoBtn.disabled = !value;
+    sendBtn.disabled = !value;
+    if (!value) {
+      $('deviceText').textContent = '—';
+      autoMode = false;
+      $('modeText').textContent = 'STOPPED';
+    }
+  }
+
+  function supportsWebBluetooth() {
+    return !!navigator.bluetooth;
+  }
+
+  if (!supportsWebBluetooth()) {
+    $('browserNotice').innerHTML =
+      '<b>Web Bluetooth is not available in this browser.</b> Use Chrome/Edge on a Mac/PC or Chrome on Android. Safari on iPhone/iPad does not provide native Web Bluetooth.';
+    connectBtn.disabled = true;
+  }
+
+  async function connectBLE() {
+    try {
+      log('Opening BLE device picker…');
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }],
+        optionalServices: [SERVICE_UUID]
+      });
+
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      $('deviceText').textContent = device.name || 'ESP32-S3';
+
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      rxCharacteristic = await service.getCharacteristic(RX_UUID);
+      txCharacteristic = await service.getCharacteristic(TX_UUID);
+
+      await txCharacteristic.startNotifications();
+      txCharacteristic.addEventListener('characteristicvaluechanged', onTelemetry);
+
+      setConnected(true);
+      log(`Connected to ${device.name || 'BLE device'}`);
+
+      // Initialize the firmware with safe manual defaults.
+      await sendCommand(`MSPEED ${$('speedSlider').value}`);
+      await sendCommand(`TURN ${$('turnSlider').value}`);
+      await sendCommand('S');
+    } catch (err) {
+      log(`Connect error: ${err.message || err}`);
+      setConnected(false);
+    }
+  }
+
+  function onDisconnected() {
+    log('BLE disconnected. Firmware should stop the motors via its disconnect failsafe.');
+    setConnected(false);
+    rxCharacteristic = null;
+    txCharacteristic = null;
+    resetJoystick(false);
+  }
+
+  function disconnectBLE() {
+    if (device?.gatt?.connected) {
+      // Try to stop first, then disconnect.
+      sendCommand('S').finally(() => device.gatt.disconnect());
+    }
+  }
+
+  function sendCommand(command) {
+    if (!connected || !rxCharacteristic) return Promise.resolve();
+
+    const clean = String(command).trim().toUpperCase();
+    if (!clean) return Promise.resolve();
+
+    const bytes = new TextEncoder().encode(clean);
+
+    writeChain = writeChain
+      .catch(() => {})
+      .then(async () => {
+        if (!connected || !rxCharacteristic) return;
+        if (rxCharacteristic.writeValueWithoutResponse) {
+          await rxCharacteristic.writeValueWithoutResponse(bytes);
+        } else {
+          await rxCharacteristic.writeValue(bytes);
+        }
+      })
+      .catch(err => log(`BLE write failed (${clean}): ${err.message || err}`));
+
+    $('commandOut').textContent = clean.length > 10 ? clean.slice(0,10) : clean;
+    return writeChain;
+  }
+
+  function parseTelemetry(text) {
+    // Expected firmware telemetry example: L72 R68 X15 Y13
+    const l = text.match(/\bL(-?\d+)/i);
+    const r = text.match(/\bR(-?\d+)/i);
+    const x = text.match(/\bX(-?\d+)/i);
+    const y = text.match(/\bY(-?\d+)/i);
+    const mode = text.match(/MODE=([A-Z]+)/i);
+
+    if (l) $('leftDistance').textContent = Number(l[1]) < 0 ? 'Invalid' : `${l[1]} cm`;
+    if (r) $('rightDistance').textContent = Number(r[1]) < 0 ? 'Invalid' : `${r[1]} cm`;
+    if (x) $('leftMotor').textContent = `${x[1]}%`;
+    if (y) $('rightMotor').textContent = `${y[1]}%`;
+    if (mode) $('modeText').textContent = mode[1];
+  }
+
+  function onTelemetry(event) {
+    const text = new TextDecoder().decode(event.target.value);
+    log(`RX: ${text}`);
+    parseTelemetry(text);
+  }
+
+  function joystickPosition(event) {
+    const rect = joystick.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const radius = rect.width / 2;
+
+    let x = (event.clientX - cx) / radius;
+    let y = (event.clientY - cy) / radius;
+
+    const mag = Math.hypot(x, y);
+    if (mag > 0.88) {
+      x = x / mag * 0.88;
+      y = y / mag * 0.88;
+    }
+    return { x, y };
+  }
+
+  function drawStick(x, y) {
+    const radius = joystick.clientWidth / 2;
+    stick.style.transform =
+      `translate(calc(-50% + ${x * radius}px), calc(-50% + ${y * radius}px))`;
+  }
+
+  function quantize(value, step=1) {
+    return Math.round(value / step) * step;
+  }
+
+  function processJoystick(x, y, force=false) {
+    const now = performance.now();
+    if (!force && now - lastJoystickSend < SEND_INTERVAL) return;
+    lastJoystickSend = now;
+
+    const forwardAxis = -y;
+    const steerAxis = x;
+    const throttleAbs = Math.abs(forwardAxis);
+
+    const maxSpeed = Number($('speedSlider').value);
+    const maxTurn  = Number($('turnSlider').value);
+
+    let speed = Math.round(maxSpeed * Math.min(1, throttleAbs / 0.88));
+    let turn  = Math.round(maxTurn * Math.min(1, Math.abs(steerAxis) / 0.88));
+
+    speed = quantize(Math.max(0, speed), 1);
+    turn = quantize(Math.max(0, turn), 1);
+
+    $('throttleOut').textContent = `${Math.round(forwardAxis / 0.88 * 100)}%`;
+    $('steerOut').textContent = `${Math.round(steerAxis / 0.88 * 100)}%`;
+
+    let direction = 'S';
+
+    // Neutral joystick = stop.
+    if (throttleAbs < DEADZONE && Math.abs(steerAxis) < DEADZONE) {
+      direction = 'S';
+      speed = 0;
+      turn = 0;
+    } else if (forwardAxis < -DEADZONE) {
+      // Current firmware supports straight reverse.
+      direction = 'B';
+    } else {
+      // Forward steering. Small X = straight.
+      if (Math.abs(steerAxis) < DEADZONE) direction = 'F';
+      else direction = steerAxis < 0 ? 'L' : 'R';
+    }
+
+    // Joystick movement takes ownership from AUTO.
+    if (direction !== 'S') {
+      autoMode = false;
+      $('modeText').textContent = direction === 'F' ? 'MANUAL FORWARD'
+        : direction === 'B' ? 'MANUAL REVERSE'
+        : direction === 'L' ? 'MANUAL LEFT'
+        : 'MANUAL RIGHT';
+    }
+
+    // Avoid flooding BLE. Only change values when needed.
+    const ops = [];
+
+    if (speed > 0 && Math.abs(speed - lastSentSpeed) >= 1) {
+      ops.push(`MSPEED ${speed}`);
+      lastSentSpeed = speed;
+    }
+
+    if ((direction === 'L' || direction === 'R') && Math.abs(turn - lastSentTurn) >= 1) {
+      ops.push(`TURN ${turn}`);
+      lastSentTurn = turn;
+    }
+
+    if (direction !== lastDirection || force) {
+      ops.push(direction);
+      lastDirection = direction;
+    }
+
+    // Maintain the firmware's manual deadman timer while held.
+    if (direction !== 'S' && Date.now() - lastKeepAlive > 900) {
+      ops.push('KEEP');
+      lastKeepAlive = Date.now();
+    }
+
+    ops.forEach(sendCommand);
+  }
+
+  function startJoystick(event) {
+    if (!connected) return;
+    event.preventDefault();
+    joystickActive = true;
+    joystick.setPointerCapture?.(event.pointerId);
+    const {x,y} = joystickPosition(event);
+    drawStick(x,y);
+    processJoystick(x,y,true);
+  }
+
+  function moveJoystick(event) {
+    if (!joystickActive || !connected) return;
+    event.preventDefault();
+    const {x,y} = joystickPosition(event);
+    drawStick(x,y);
+    processJoystick(x,y,false);
+  }
+
+  function resetJoystick(sendStop=true) {
+    joystickActive = false;
+    drawStick(0,0);
+    $('throttleOut').textContent = '0%';
+    $('steerOut').textContent = '0%';
+    $('commandOut').textContent = 'S';
+    lastDirection = 'S';
+    lastSentSpeed = -1;
+    lastSentTurn = -1;
+
+    if (sendStop && connected) {
+      sendCommand('S');
+      $('modeText').textContent = 'STOPPED';
+      autoMode = false;
+    }
+  }
+
+  joystick.addEventListener('pointerdown', startJoystick);
+  joystick.addEventListener('pointermove', moveJoystick);
+  joystick.addEventListener('pointerup', () => resetJoystick(true));
+  joystick.addEventListener('pointercancel', () => resetJoystick(true));
+  joystick.addEventListener('lostpointercapture', () => {
+    if (joystickActive) resetJoystick(true);
+  });
+
+  $('speedSlider').addEventListener('input', e => {
+    $('speedValue').textContent = e.target.value;
+    // If held, next joystick update uses it immediately.
+  });
+
+  $('turnSlider').addEventListener('input', e => {
+    $('turnValue').textContent = e.target.value;
+  });
+
+  stopBtn.addEventListener('click', async () => {
+    await sendCommand('S');
+    resetJoystick(false);
+    autoMode = false;
+    $('modeText').textContent = 'STOPPED';
+    log('STOP sent.');
+  });
+
+  autoBtn.addEventListener('click', async () => {
+    resetJoystick(false);
+    autoMode = true;
+    await sendCommand('AUTO');
+    $('modeText').textContent = 'AUTO';
+    log('AUTO navigation requested.');
+  });
+
+  connectBtn.addEventListener('click', connectBLE);
+  disconnectBtn.addEventListener('click', disconnectBLE);
+
+  sendBtn.addEventListener('click', () => {
+    const input = $('manualCommand');
+    const command = input.value.trim();
+    if (!command) return;
+    sendCommand(command);
+    log(`TX: ${command.toUpperCase()}`);
+    input.value = '';
+  });
+
+  $('manualCommand').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendBtn.click();
+  });
+
+  // Stop when page is hidden while manually driving.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && connected && !autoMode) {
+      sendCommand('S');
+      resetJoystick(false);
+    }
+  });
+
+  // Keepalive while joystick is continuously held but motion doesn't change.
+  setInterval(() => {
+    if (connected && joystickActive && lastDirection !== 'S') {
+      sendCommand('KEEP');
+      lastKeepAlive = Date.now();
+    }
+  }, 1000);
+
+  setConnected(false);
+})();
+</script>
+</body>
+</html>
